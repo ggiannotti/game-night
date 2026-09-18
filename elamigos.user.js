@@ -2,7 +2,7 @@
 // @name         ElAmigos Modern UI
 // @bound-url    https://elamigos.site/#/
 // @namespace    elamigos.modern.ui
-// @version      1.5.10
+// @version      1.5.11
 // @description  Responsive dark ElAmigos interface with 12 latest releases, configurable language highlighting, pagination, A–Z archive, compact cards, technical details, details modal, and video.
 // @author       alfablac
 // @downloadURL  https://raw.githubusercontent.com/alfablac/game-night/main/elamigos.user.js
@@ -54,6 +54,45 @@
         function run() {
             if (window.__eaFilecryptPowGuard) return;
             window.__eaFilecryptPowGuard = true;
+
+            try {
+                var aclibRef = { runPop: function () {}, run: function () {}, runAutoTag: function () {}, runBanner: function () {} };
+                Object.defineProperty(window, 'aclib', {
+                    configurable: true,
+                    get: function () { return aclibRef; },
+                    set: function (value) {
+                        aclibRef = value && typeof value === 'object' ? value : aclibRef;
+                        aclibRef.runPop = function () {};
+                        aclibRef.run = function () {};
+                    }
+                });
+            } catch (error) { /* ignore */ }
+
+            function killAdBoxes() {
+                var nodes = document.querySelectorAll('body *');
+                var i;
+                var area = window.innerWidth * window.innerHeight;
+                for (i = 0; i < nodes.length; i++) {
+                    var el = nodes[i];
+                    if (el.id === 'pow-captcha' || (el.closest && el.closest('#pow-captcha, #cform'))) {
+                        continue;
+                    }
+                    var style = window.getComputedStyle(el);
+                    if (style.position !== 'fixed' && style.position !== 'absolute') {
+                        continue;
+                    }
+                    var z = parseInt(style.zIndex, 10);
+                    if (!(z >= 1000)) {
+                        continue;
+                    }
+                    var box = el.getBoundingClientRect();
+                    if (box.width * box.height < area * 0.12) {
+                        continue;
+                    }
+                    el.remove();
+                }
+            }
+            setInterval(killAdBoxes, 400);
 
             try {
                 if (typeof Worker !== 'undefined' && Worker.prototype && !Worker.prototype.__eaSkipPowPause) {
