@@ -2,7 +2,7 @@
 // @name         ElAmigos Modern UI
 // @bound-url    https://elamigos.site/#/
 // @namespace    elamigos.modern.ui
-// @version      1.5.6
+// @version      1.5.7
 // @description  Responsive dark ElAmigos interface with 12 latest releases, configurable language highlighting, pagination, A–Z archive, compact cards, technical details, details modal, and video.
 // @author       alfablac
 // @downloadURL  https://raw.githubusercontent.com/alfablac/game-night/main/elamigos.user.js
@@ -2032,7 +2032,7 @@
             if (state.powState !== 'working' || state.stallReload || !child() || !state.workingSince) {
                 return;
             }
-            if (Date.now() - state.workingSince < 90000) {
+            if (Date.now() - state.workingSince < 180000) {
                 return;
             }
             state.stallReload = true;
