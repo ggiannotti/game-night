@@ -2,7 +2,7 @@
 // @name         ElAmigos Modern UI
 // @bound-url    https://elamigos.site/#/
 // @namespace    elamigos.modern.ui
-// @version      1.4.8
+// @version      1.4.9
 // @description  Responsive dark ElAmigos interface with 12 latest releases, configurable language highlighting, pagination, A–Z archive, compact cards, technical details, details modal, and video.
 // @author       alfablac
 // @downloadURL  https://raw.githubusercontent.com/alfablac/game-night/main/elamigos.user.js
@@ -42,51 +42,60 @@
     }
 
     // Filecrypt's widget (pow_captcha.js) starts SHA-1 work on a click and pauses the
-    // worker on window.blur. The resolver iframe is never focused, so ignore pause and
-    // click "I am a human" once the box is idle. Keep retrying until data-state leaves
-    // idle: a click before their defer script binds the listener is a no-op.
+    // worker on window.blur. Tampermonkey with @grant runs in an isolated world, so the
+    // Worker wrap and the click must also run in the page world or they miss the widget.
     function installFilecryptPow() {
-        try {
-            if (typeof Worker !== 'undefined' && Worker.prototype && !Worker.prototype.__eaSkipPowPause) {
-                var origPost = Worker.prototype.postMessage;
-                Worker.prototype.postMessage = function (msg) {
-                    if (msg && msg.cmd === 'pause') return;
-                    return origPost.apply(this, arguments);
-                };
-                Worker.prototype.__eaSkipPowPause = true;
-            }
-        } catch (error) { /* keep Filecrypt usable if Worker is frozen */ }
-
-        function clickPow() {
-            var root = document.getElementById('pow-captcha');
-            if (!root) return false;
-            if (root.getAttribute('data-state') !== 'idle') return true;
-            var box = root.querySelector('.pow-captcha__box');
-            if (!box) return false;
+        function run() {
             try {
-                box.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
-            } catch (error) {
-                box.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+                if (typeof Worker !== 'undefined' && Worker.prototype && !Worker.prototype.__eaSkipPowPause) {
+                    var origPost = Worker.prototype.postMessage;
+                    Worker.prototype.postMessage = function (msg) {
+                        if (msg && msg.cmd === 'pause') return;
+                        return origPost.apply(this, arguments);
+                    };
+                    Worker.prototype.__eaSkipPowPause = true;
+                }
+            } catch (error) { /* keep Filecrypt usable if Worker is frozen */ }
+
+            function clickPow() {
+                var root = document.getElementById('pow-captcha');
+                if (!root) return false;
+                if (root.getAttribute('data-state') !== 'idle') return true;
+                var box = root.querySelector('.pow-captcha__box');
+                if (!box) return false;
+                try {
+                    box.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
+                } catch (error) {
+                    box.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+                }
+                box.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                box.click();
+                return root.getAttribute('data-state') !== 'idle';
             }
-            box.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-            box.click();
-            return root.getAttribute('data-state') !== 'idle';
+
+            function startWhenReady() {
+                if (clickPow()) return;
+                var tries = 0;
+                var timer = setInterval(function () {
+                    tries += 1;
+                    if (clickPow() || tries > 40) clearInterval(timer);
+                }, 250);
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', startWhenReady, { once: true });
+            } else {
+                startWhenReady();
+            }
         }
 
-        function startWhenReady() {
-            if (clickPow()) return;
-            var tries = 0;
-            var timer = setInterval(function () {
-                tries += 1;
-                if (clickPow() || tries > 40) clearInterval(timer);
-            }, 250);
-        }
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', startWhenReady, { once: true });
-        } else {
-            startWhenReady();
-        }
+        run();
+        try {
+            var script = document.createElement('script');
+            script.textContent = '(' + run.toString() + ')();';
+            (document.documentElement || document.head).appendChild(script);
+            script.remove();
+        } catch (error) { /* page CSP may block; isolated-world run() still applied */ }
     }
 
     var home = /^\/(?:index\.html?)?$/.test(location.pathname);
