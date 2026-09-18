@@ -449,6 +449,61 @@ test('Filecrypt Link page skips an off-site /Go/ candidate before the real one',
     assert.doesNotMatch(output, /ads\.example/);
 });
 
+async function openFilecrypt(t, html) {
+    const context = await browser.newContext({ serviceWorkers: 'block' });
+    t.after(() => context.close());
+    const body = html.startsWith('<!doctype') || html.startsWith('<!')
+        ? html
+        : '<!doctype html><html><head></head><body>' + html + '</body></html>';
+    await context.route('**/*', route => {
+        const url = route.request().url();
+        if (url.startsWith('blob:') || url.startsWith('data:')) return route.continue();
+        if (route.request().isNavigationRequest() && /^https:\/\/(?:www\.)?filecrypt\.cc\//i.test(url)) {
+            return route.fulfill({ contentType: 'text/html', body });
+        }
+        return route.abort();
+    });
+    const setup = '(' + installMocks.toString() + ')(' + JSON.stringify({}) + ');\n';
+    await context.addInitScript({ content: '(() => { const run = () => {\n' + setup + source
+        + '\n}; if (document.documentElement) run(); else { const observer = new MutationObserver(() => {'
+        + ' if (document.documentElement) { observer.disconnect(); run(); } }); observer.observe(document, { childList: true }); } })();' });
+    const page = await context.newPage();
+    page.setDefaultTimeout(5_000);
+    await page.goto('https://filecrypt.cc/Container/a.html');
+    return page;
+}
+
+test('Filecrypt page clicks the PoW checkbox and drops worker pause messages', async t => {
+    const page = await openFilecrypt(t, `
+        <div class="pow-captcha" id="pow-captcha" data-state="idle">
+            <div class="pow-captcha__box" role="checkbox">I am a human</div>
+        </div>
+        <script>
+            window.__powClicks = 0;
+            document.querySelector('.pow-captcha__box').addEventListener('click', function () {
+                window.__powClicks += 1;
+            });
+        </script>
+    `);
+    await page.waitForFunction(() => window.__powClicks >= 1);
+    const echoed = await page.evaluate(async () => {
+        const worker = new Worker(URL.createObjectURL(new Blob(
+            ['self.onmessage = function (e) { self.postMessage(e.data); };'],
+            { type: 'text/javascript' }
+        )));
+        const first = new Promise(resolve => { worker.onmessage = event => resolve(event.data); });
+        worker.postMessage({ cmd: 'pause' });
+        worker.postMessage({ cmd: 'start', challenge: 'abc', difficulty: 1 });
+        const data = await Promise.race([
+            first,
+            new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 1000))
+        ]);
+        worker.terminate();
+        return data;
+    });
+    assert.deepEqual(echoed, { cmd: 'start', challenge: 'abc', difficulty: 1 });
+});
+
 test('userscript metadata names the author and project URLs', () => {
     assert.match(source, /@author\s+alfablac/);
     assert.match(source, /@homepage\s+https:\/\/github\.com\/alfablac\/game-night/);
