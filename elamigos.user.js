@@ -2,7 +2,7 @@
 // @name         ElAmigos Modern UI
 // @bound-url    https://elamigos.site/#/
 // @namespace    elamigos.modern.ui
-// @version      1.5.7
+// @version      1.5.8
 // @description  Responsive dark ElAmigos interface with 12 latest releases, configurable language highlighting, pagination, A–Z archive, compact cards, technical details, details modal, and video.
 // @author       alfablac
 // @downloadURL  https://raw.githubusercontent.com/alfablac/game-night/main/elamigos.user.js
@@ -69,8 +69,16 @@
             try {
                 var origOpen = window.open;
                 window.open = function (url) {
-                    var href = String(url || '');
-                    if (/aliexpress|playfortuna|casino|adexchanger|ntwkbc|usrpub|doubleclick|popads|duckier/i.test(href)) {
+                    var href = url == null ? '' : String(url);
+                    if (!href || href === 'about:blank') {
+                        return null;
+                    }
+                    try {
+                        var host = new URL(href, location.href).hostname;
+                        if (!/(^|\.)filecrypt\.cc$/i.test(host)) {
+                            return null;
+                        }
+                    } catch (error) {
                         return null;
                     }
                     return origOpen.apply(this, arguments);
@@ -83,13 +91,7 @@
                     EventTarget.prototype.addEventListener = function (type, listener, options) {
                         var capture = options === true || (options && options.capture);
                         if ((type === 'click' || type === 'pointerdown' || type === 'mousedown') && capture && (this === document || this === window) && typeof listener === 'function') {
-                            var wrapped = function (event) {
-                                if (event.target && event.target.closest && event.target.closest('#pow-captcha')) {
-                                    return;
-                                }
-                                return listener.call(this, event);
-                            };
-                            return origListen.call(this, type, wrapped, options);
+                            return origListen.call(this, type, function () { /* Filecrypt ads */ }, options);
                         }
                         return origListen.call(this, type, listener, options);
                     };
