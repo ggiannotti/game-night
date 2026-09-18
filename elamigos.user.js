@@ -2,7 +2,7 @@
 // @name         ElAmigos Modern UI
 // @bound-url    https://elamigos.site/#/
 // @namespace    elamigos.modern.ui
-// @version      1.5.11
+// @version      1.5.12
 // @description  Responsive dark ElAmigos interface with 12 latest releases, configurable language highlighting, pagination, A–Z archive, compact cards, technical details, details modal, and video.
 // @author       alfablac
 // @downloadURL  https://raw.githubusercontent.com/alfablac/game-night/main/elamigos.user.js
@@ -176,6 +176,16 @@
                 }
             }
 
+            function clickKey() {
+                var retry = '';
+                try {
+                    retry = new URL(location.href).searchParams.get('ea_retry') || '';
+                } catch (error) {
+                    retry = '';
+                }
+                return 'ea-fc-click:' + location.pathname + ':' + retry;
+            }
+
             function clickOnce() {
                 var root = document.getElementById('pow-captcha');
                 var state = root && root.getAttribute('data-state');
@@ -191,8 +201,12 @@
                     setTimeout(clickOnce, 250);
                     return;
                 }
+                try {
+                    if (sessionStorage.getItem(clickKey()) === '1') return;
+                } catch (error) { /* ignore */ }
                 if (window.__eaPowClicked) return;
                 window.__eaPowClicked = true;
+                try { sessionStorage.setItem(clickKey(), '1'); } catch (error) { /* ignore */ }
                 box.click();
             }
 
@@ -1902,7 +1916,7 @@
         var copyBtn = E('button', { class: 'ea-btn', type: 'button', text: 'Copy links' });
         var jdBtn = E('button', { class: 'ea-btn', type: 'button', text: 'Send to JDownloader' });
         var toolbar = E('div', { class: 'ea-fc-toolbar' }, [copyBtn, jdBtn]);
-        var state = { rows: [], index: 0, pending: null, powState: '', workingSince: 0, stallReload: false, postRetry: false };
+        var state = { rows: [], index: 0, pending: null, powState: '', workingSince: 0, stallReload: false };
         var popup = null;
 
         function goUrls() {
@@ -1983,12 +1997,6 @@
                     state.powState = payload.state;
                 }
                 if ((payload.state === 'working' || payload.state === 'idle') && previous === 'done') {
-                    if (!state.postRetry && child()) {
-                        state.postRetry = true;
-                        status.textContent = 'Filecrypt rejected the proof. Retrying in the Filecrypt tab…';
-                        try { popup.location.href = containerURL; } catch (error) { /* ignore */ }
-                        return;
-                    }
                     status.textContent = 'Filecrypt rejected the proof and issued a new captcha.';
                     return;
                 }
@@ -2092,7 +2100,11 @@
             }
             state.stallReload = true;
             status.textContent = 'Proof-of-work stalled. Retrying in the Filecrypt tab…';
-            try { popup.location.href = containerURL; } catch (error) { /* ignore */ }
+            try {
+                var retry = new URL(containerURL);
+                retry.searchParams.set('ea_retry', String(Date.now()));
+                popup.location.href = retry.href;
+            } catch (error) { /* ignore */ }
         }, 5000);
         app.append(overlay);
         if (!popup) {
