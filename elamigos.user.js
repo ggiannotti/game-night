@@ -35,7 +35,7 @@
 
     if (isFilecrypt) {
         installFilecryptPow();
-        if (window.top !== window) {
+        if (window.top !== window || window.opener) {
             startFilecryptFrame();
         }
         return;
@@ -43,7 +43,8 @@
 
     // Filecrypt's widget (pow_captcha.js) starts SHA-1 work on a click and pauses the
     // worker on window.blur. The resolver iframe is never focused, so ignore pause and
-    // click "I am a human" once the box is idle.
+    // click "I am a human" once the box is idle. Keep retrying until data-state leaves
+    // idle: a click before their defer script binds the listener is a no-op.
     function installFilecryptPow() {
         try {
             if (typeof Worker !== 'undefined' && Worker.prototype && !Worker.prototype.__eaSkipPowPause) {
@@ -58,11 +59,18 @@
 
         function clickPow() {
             var root = document.getElementById('pow-captcha');
-            if (!root || root.getAttribute('data-state') !== 'idle') return false;
+            if (!root) return false;
+            if (root.getAttribute('data-state') !== 'idle') return true;
             var box = root.querySelector('.pow-captcha__box');
             if (!box) return false;
+            try {
+                box.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
+            } catch (error) {
+                box.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+            }
+            box.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
             box.click();
-            return true;
+            return root.getAttribute('data-state') !== 'idle';
         }
 
         function startWhenReady() {
@@ -105,8 +113,14 @@
 
         function post(message) {
             // Only the elamigos.site overlay should receive resolver results (a non-matching targetOrigin is silently dropped).
+            var envelope = { eaFilecrypt: true, payload: message };
             ['https://elamigos.site', 'https://www.elamigos.site'].forEach(function (origin) {
-                window.parent.postMessage({ eaFilecrypt: true, payload: message }, origin);
+                try { window.parent.postMessage(envelope, origin); } catch (error) { /* ignore */ }
+                try {
+                    if (window.opener && window.opener !== window) {
+                        window.opener.postMessage(envelope, origin);
+                    }
+                } catch (error) { /* ignore */ }
             });
         }
 
@@ -1811,11 +1825,14 @@
         bindModalKeys(overlay, closeOverlay);
         window.addEventListener('message', onMessage);
         app.append(overlay);
-        close.focus();
+        overlay.focus();
+        containerFrame.addEventListener('load', function () {
+            try { containerFrame.focus(); } catch (error) { /* ignore */ }
+        });
         setTimeout(function () {
             if (!state.rows.length && overlay.isConnected) {
-                status.textContent = 'Still waiting for Filecrypt links. If the proof-of-work is stuck, open the container directly.';
-                status.append(E('a', { class: 'ea-btn', href: containerURL, target: '_blank', rel: 'noopener', text: 'Open Filecrypt separately' }));
+                status.textContent = 'Still waiting for Filecrypt links. If the proof-of-work is stuck, open the container in a tab (first-party cookies).';
+                status.append(E('a', { class: 'ea-btn', href: containerURL, target: '_blank', rel: 'opener', text: 'Open Filecrypt separately' }));
             }
         }, 8000);
     }

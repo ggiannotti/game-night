@@ -480,12 +480,17 @@ test('Filecrypt page clicks the PoW checkbox and drops worker pause messages', a
         </div>
         <script>
             window.__powClicks = 0;
+            window.__powPointers = 0;
+            document.querySelector('.pow-captcha__box').addEventListener('pointerdown', function () {
+                window.__powPointers += 1;
+            });
             document.querySelector('.pow-captcha__box').addEventListener('click', function () {
                 window.__powClicks += 1;
+                document.getElementById('pow-captcha').setAttribute('data-state', 'working');
             });
         </script>
     `);
-    await page.waitForFunction(() => window.__powClicks >= 1);
+    await page.waitForFunction(() => window.__powClicks >= 1 && window.__powPointers >= 1);
     const echoed = await page.evaluate(async () => {
         const worker = new Worker(URL.createObjectURL(new Blob(
             ['self.onmessage = function (e) { self.postMessage(e.data); };'],
