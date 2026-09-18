@@ -2,7 +2,7 @@
 // @name         ElAmigos Modern UI
 // @bound-url    https://elamigos.site/#/
 // @namespace    elamigos.modern.ui
-// @version      1.5.3
+// @version      1.5.4
 // @description  Responsive dark ElAmigos interface with 12 latest releases, configurable language highlighting, pagination, A–Z archive, compact cards, technical details, details modal, and video.
 // @author       alfablac
 // @downloadURL  https://raw.githubusercontent.com/alfablac/game-night/main/elamigos.user.js
@@ -113,8 +113,9 @@
 
             function clickOnce() {
                 var root = document.getElementById('pow-captcha');
-                if (!root || root.getAttribute('data-state') !== 'idle') return;
-                var box = root.querySelector('.pow-captcha__box');
+                var state = root && root.getAttribute('data-state');
+                if (state && state !== 'idle') return;
+                var box = root && root.querySelector('.pow-captcha__box');
                 if (!box) {
                     clickOnce.waits = (clickOnce.waits || 0) + 1;
                     if (clickOnce.waits <= 80) setTimeout(clickOnce, 250);
