@@ -457,6 +457,8 @@ async function openFilecryptOverlay(t, { useClock = false } = {}) {
     const overlay = page.locator('.ea-modal[aria-label="Filecrypt resolver"]');
     await overlay.waitFor();
     const popup = await popupPromise;
+    assert.equal(await overlay.getByRole('button', { name: 'Copy links' }).count(), 1);
+    assert.equal(await overlay.getByRole('button', { name: 'Send to JDownloader' }).count(), 1);
     return { page, overlay, popup };
 }
 
@@ -510,7 +512,9 @@ test('Filecrypt PoW helpers inject into the page world', () => {
     assert.match(source, /script\.textContent = '\(' \+ run\.toString\(\) \+ '\)\(\);'/);
     assert.match(source, /window\.open\(containerURL, 'ea-filecrypt'\)/);
     assert.match(source, /__eaSkipPowPause/);
-    assert.doesNotMatch(source, /__eaPowKicked/);
+    assert.match(source, /__eaPowClicked/);
+    assert.match(source, /127\.0\.0\.1:9666\/flash\/add/);
+    assert.doesNotMatch(source, /location\.href = goURL/);
 });
 
 test('Filecrypt PoW box click reaches the widget but not document ads listeners', async t => {
@@ -528,8 +532,7 @@ test('Filecrypt PoW box click reaches the widget but not document ads listeners'
             document.addEventListener('click', function () { window.__doc += 1; });
         </script>
     `);
-    await page.waitForFunction(() => !!(document.querySelector('.pow-captcha__box') && document.querySelector('.pow-captcha__box').__eaStopAds));
-    await page.locator('.pow-captcha__box').click();
+    await page.waitForFunction(() => window.__box >= 1);
     assert.equal(await page.evaluate(() => window.__box), 1);
     assert.equal(await page.evaluate(() => window.__doc), 0);
 });
