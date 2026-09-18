@@ -2,7 +2,7 @@
 // @name         ElAmigos Modern UI
 // @bound-url    https://elamigos.site/#/
 // @namespace    elamigos.modern.ui
-// @version      1.5.4
+// @version      1.5.5
 // @description  Responsive dark ElAmigos interface with 12 latest releases, configurable language highlighting, pagination, A–Z archive, compact cards, technical details, details modal, and video.
 // @author       alfablac
 // @downloadURL  https://raw.githubusercontent.com/alfablac/game-night/main/elamigos.user.js
@@ -127,10 +127,9 @@
             }
 
             guardBox();
-            setTimeout(clickOnce, 700);
+            setTimeout(clickOnce, 900);
         }
 
-        run();
         try {
             var script = document.createElement('script');
             script.textContent = '(' + run.toString() + ')();';
@@ -1806,7 +1805,7 @@
         var copyBtn = E('button', { class: 'ea-btn', type: 'button', text: 'Copy links' });
         var jdBtn = E('button', { class: 'ea-btn', type: 'button', text: 'Send to JDownloader' });
         var toolbar = E('div', { class: 'ea-fc-toolbar' }, [copyBtn, jdBtn]);
-        var state = { rows: [], index: 0, pending: null, powState: '' };
+        var state = { rows: [], index: 0, pending: null, powState: '', workingSince: 0, stallReload: false };
         var popup = null;
 
         function goUrls() {
@@ -1826,6 +1825,7 @@
 
         function closeOverlay() {
             window.removeEventListener('message', onMessage);
+            clearInterval(stallTimer);
             if (child()) {
                 try { popup.close(); } catch (error) { /* ignore */ }
             }
@@ -1889,12 +1889,19 @@
                     status.textContent = 'Filecrypt rejected the proof and issued a new captcha.';
                     return;
                 }
+                if (payload.state === 'idle' && previous !== 'done') {
+                    state.workingSince = 0;
+                }
                 if (payload.state === 'working') {
+                    if (!state.workingSince) {
+                        state.workingSince = Date.now();
+                    }
                     status.textContent = 'Solving Filecrypt proof-of-work…';
                     if (child()) {
                         try { popup.focus(); } catch (error) { /* ignore */ }
                     }
                 } else if (payload.state === 'done') {
+                    state.workingSince = 0;
                     status.textContent = 'Proof-of-work finished. Waiting for the download table…';
                 } else if (payload.state === 'fail') {
                     status.textContent = 'Filecrypt proof-of-work failed.';
@@ -1969,6 +1976,21 @@
         overlay.append(box);
         bindModalKeys(overlay, closeOverlay);
         window.addEventListener('message', onMessage);
+        var stallTimer = setInterval(function () {
+            if (!overlay.isConnected) {
+                clearInterval(stallTimer);
+                return;
+            }
+            if (state.powState !== 'working' || state.stallReload || !child() || !state.workingSince) {
+                return;
+            }
+            if (Date.now() - state.workingSince < 90000) {
+                return;
+            }
+            state.stallReload = true;
+            status.textContent = 'Proof-of-work stalled. Retrying in the Filecrypt tab…';
+            try { popup.location.reload(); } catch (error) { /* ignore */ }
+        }, 5000);
         app.append(overlay);
         if (!popup) {
             overlay.focus();

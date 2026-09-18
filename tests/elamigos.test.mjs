@@ -513,6 +513,7 @@ test('Filecrypt PoW helpers inject into the page world', () => {
     assert.match(source, /window\.open\(containerURL, 'ea-filecrypt'\)/);
     assert.match(source, /__eaSkipPowPause/);
     assert.match(source, /__eaPowClicked/);
+    assert.match(source, /Proof-of-work stalled/);
     assert.match(source, /127\.0\.0\.1:9666\/flash\/add/);
     assert.doesNotMatch(source, /location\.href = goURL/);
 });
