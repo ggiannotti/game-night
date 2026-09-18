@@ -517,6 +517,7 @@ test('Filecrypt PoW helpers inject into the page world', () => {
     assert.match(source, /180000/);
     assert.match(source, /Filecrypt ads/);
     assert.match(source, /document\.hasFocus = function \(\) \{ return true; \}/);
+    assert.match(source, /popup\.location\.href = containerURL/);
     assert.match(source, /pow_data/);
     assert.match(source, /sigReady/);
     assert.match(source, /127\.0\.0\.1:9666\/flash\/add/);

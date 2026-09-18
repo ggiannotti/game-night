@@ -2,7 +2,7 @@
 // @name         ElAmigos Modern UI
 // @bound-url    https://elamigos.site/#/
 // @namespace    elamigos.modern.ui
-// @version      1.5.9
+// @version      1.5.10
 // @description  Responsive dark ElAmigos interface with 12 latest releases, configurable language highlighting, pagination, A–Z archive, compact cards, technical details, details modal, and video.
 // @author       alfablac
 // @downloadURL  https://raw.githubusercontent.com/alfablac/game-night/main/elamigos.user.js
@@ -1947,7 +1947,7 @@
                     if (!state.postRetry && child()) {
                         state.postRetry = true;
                         status.textContent = 'Filecrypt rejected the proof. Retrying in the Filecrypt tab…';
-                        try { popup.location.reload(); } catch (error) { /* ignore */ }
+                        try { popup.location.href = containerURL; } catch (error) { /* ignore */ }
                         return;
                     }
                     status.textContent = 'Filecrypt rejected the proof and issued a new captcha.';
@@ -2053,7 +2053,7 @@
             }
             state.stallReload = true;
             status.textContent = 'Proof-of-work stalled. Retrying in the Filecrypt tab…';
-            try { popup.location.reload(); } catch (error) { /* ignore */ }
+            try { popup.location.href = containerURL; } catch (error) { /* ignore */ }
         }, 5000);
         app.append(overlay);
         if (!popup) {
