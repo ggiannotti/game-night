@@ -2,7 +2,7 @@
 // @name         ElAmigos Modern UI
 // @bound-url    https://elamigos.site/#/
 // @namespace    elamigos.modern.ui
-// @version      1.5.5
+// @version      1.5.6
 // @description  Responsive dark ElAmigos interface with 12 latest releases, configurable language highlighting, pagination, A–Z archive, compact cards, technical details, details modal, and video.
 // @author       alfablac
 // @downloadURL  https://raw.githubusercontent.com/alfablac/game-night/main/elamigos.user.js
@@ -111,6 +111,16 @@
                 }, false);
             }
 
+            function sigReady() {
+                try {
+                    return performance.getEntriesByType('resource').some(function (entry) {
+                        return /\/js\/s\.js/i.test(entry.name);
+                    });
+                } catch (error) {
+                    return false;
+                }
+            }
+
             function clickOnce() {
                 var root = document.getElementById('pow-captcha');
                 var state = root && root.getAttribute('data-state');
@@ -121,12 +131,44 @@
                     if (clickOnce.waits <= 80) setTimeout(clickOnce, 250);
                     return;
                 }
+                if (!sigReady() && (clickOnce.sigWait || 0) < 8) {
+                    clickOnce.sigWait = (clickOnce.sigWait || 0) + 1;
+                    setTimeout(clickOnce, 250);
+                    return;
+                }
                 if (window.__eaPowClicked) return;
                 window.__eaPowClicked = true;
                 box.click();
             }
 
+            function armForm() {
+                var form = document.getElementById('cform');
+                if (!form) {
+                    armForm.waits = (armForm.waits || 0) + 1;
+                    if (armForm.waits <= 80) setTimeout(armForm, 250);
+                    return;
+                }
+                if (form.__eaPowHold) return;
+                form.__eaPowHold = true;
+                form.addEventListener('submit', function (event) {
+                    var data = form.querySelector('input[name="pow_data"]');
+                    if (!data || data.value || form.__eaPowHeld) return;
+                    form.__eaPowHeld = true;
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    var tries = 0;
+                    var timer = setInterval(function () {
+                        tries += 1;
+                        if ((data.value && data.value.length) || tries > 30) {
+                            clearInterval(timer);
+                            try { form.requestSubmit(); } catch (err) { form.submit(); }
+                        }
+                    }, 100);
+                }, true);
+            }
+
             guardBox();
+            armForm();
             setTimeout(clickOnce, 900);
         }
 
@@ -1805,7 +1847,7 @@
         var copyBtn = E('button', { class: 'ea-btn', type: 'button', text: 'Copy links' });
         var jdBtn = E('button', { class: 'ea-btn', type: 'button', text: 'Send to JDownloader' });
         var toolbar = E('div', { class: 'ea-fc-toolbar' }, [copyBtn, jdBtn]);
-        var state = { rows: [], index: 0, pending: null, powState: '', workingSince: 0, stallReload: false };
+        var state = { rows: [], index: 0, pending: null, powState: '', workingSince: 0, stallReload: false, postRetry: false };
         var popup = null;
 
         function goUrls() {
@@ -1886,6 +1928,12 @@
                     state.powState = payload.state;
                 }
                 if ((payload.state === 'working' || payload.state === 'idle') && previous === 'done') {
+                    if (!state.postRetry && child()) {
+                        state.postRetry = true;
+                        status.textContent = 'Filecrypt rejected the proof. Retrying in the Filecrypt tab…';
+                        try { popup.location.reload(); } catch (error) { /* ignore */ }
+                        return;
+                    }
                     status.textContent = 'Filecrypt rejected the proof and issued a new captcha.';
                     return;
                 }
