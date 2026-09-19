@@ -2,7 +2,7 @@
 // @name         ElAmigos Modern UI
 // @bound-url    https://elamigos.site/#/
 // @namespace    elamigos.modern.ui
-// @version      1.5.13
+// @version      1.5.14
 // @description  Responsive dark ElAmigos interface with 12 latest releases, configurable language highlighting, pagination, A–Z archive, compact cards, technical details, details modal, and video.
 // @author       alfablac
 // @downloadURL  https://raw.githubusercontent.com/alfablac/game-night/main/elamigos.user.js
@@ -21,11 +21,27 @@
 // @grant        GM_addStyle
 // @connect      elamigos.site
 // @connect      www.elamigos.site
+// @connect      filecrypt.cc
+// @connect      www.filecrypt.cc
 // @connect      fastpic.org
 // @connect      www.keeplinks.org
 // @connect      2captcha.com
 // @connect      127.0.0.1
 // @connect      localhost
+// @connect      ddownload.com
+// @connect      ddl.to
+// @connect      rapidgator.net
+// @connect      rg.to
+// @connect      nitroflare.com
+// @connect      mega.nz
+// @connect      1fichier.com
+// @connect      turbobit.net
+// @connect      katfile.com
+// @connect      hexupload.net
+// @connect      multiup.io
+// @connect      uploaded.net
+// @connect      keep2share.cc
+// @connect      k2s.cc
 // @run-at       document-start
 // @changelog    Replaces the game info icon with a styled Info badge and muted YouTube button.
 // ==/UserScript==
@@ -304,6 +320,46 @@
             }
         }
 
+        function isHosterURL(value) {
+            try {
+                var parsed = new URL(value);
+                if (!/^https?:$/.test(parsed.protocol)) {
+                    return false;
+                }
+                if (/^(?:www\.)?filecrypt\.cc$/i.test(parsed.hostname)) {
+                    return false;
+                }
+                if (/^(localhost|127\.|0\.|10\.|192\.168\.)/i.test(parsed.hostname)) {
+                    return false;
+                }
+                if (/\/Go\//i.test(parsed.pathname)) {
+                    return false;
+                }
+                return /\./.test(parsed.hostname);
+            } catch (error) {
+                return false;
+            }
+        }
+
+        function followGo(goURL) {
+            return new Promise(function (resolve, reject) {
+                if (typeof GM_xmlhttpRequest !== 'function') {
+                    reject(new Error('GM_xmlhttpRequest unavailable'));
+                    return;
+                }
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: goURL,
+                    timeout: 30000,
+                    onload: function (response) {
+                        resolve(response.finalUrl || goURL);
+                    },
+                    onerror: reject,
+                    ontimeout: function () { reject(new Error('Timed out following /Go/')); }
+                });
+            });
+        }
+
         function findGoUrl() {
             var nodes = document.querySelectorAll('a[href*="/Go/"],form[action*="/Go/"],[data-url*="/Go/"]');
             for (var i = 0; i < nodes.length; i++) {
@@ -337,7 +393,16 @@
             while (Date.now() - started < 300000) {
                 var goURL = findGoUrl();
                 if (goURL) {
-                    post({ type: 'link-result', token: token, ok: true, goURL: goURL });
+                    try {
+                        var hoster = await followGo(goURL);
+                        if (!isHosterURL(hoster)) {
+                            post({ type: 'link-result', token: token, ok: false, error: 'Filecrypt did not redirect to a hoster' });
+                            return;
+                        }
+                        post({ type: 'link-result', token: token, ok: true, goURL: hoster });
+                    } catch (error) {
+                        post({ type: 'link-result', token: token, ok: false, error: String(error && error.message ? error.message : error) });
+                    }
                     return;
                 }
                 await sleep(250);
@@ -1627,9 +1692,22 @@
         }
     }
 
-    function isFilecryptGoURL(value) {
+    function isHosterURL(value) {
         try {
-            return isFilecryptURL(value) && /^\/Go\//i.test(new URL(value).pathname);
+            var parsed = new URL(value);
+            if (!/^https?:$/.test(parsed.protocol)) {
+                return false;
+            }
+            if (/^(?:www\.)?filecrypt\.cc$/i.test(parsed.hostname)) {
+                return false;
+            }
+            if (/^(localhost|127\.|0\.|10\.|192\.168\.)/i.test(parsed.hostname)) {
+                return false;
+            }
+            if (/\/Go\//i.test(parsed.pathname)) {
+                return false;
+            }
+            return /\./.test(parsed.hostname);
         } catch (error) {
             return false;
         }
@@ -1923,7 +2001,7 @@
         var title = E('strong', { text: 'Filecrypt resolver' });
         var close = E('button', { class: 'ea-btn', type: 'button', text: 'Close' });
         var status = E('div', { class: 'ea-empty', text: 'Opening Filecrypt…' });
-        var output = E('textarea', { class: 'ea-fc-results', readonly: '', placeholder: 'Resolved /Go/ URLs will appear here', 'aria-label': 'Resolved Filecrypt links' });
+        var output = E('textarea', { class: 'ea-fc-results', readonly: '', placeholder: 'Resolved hoster URLs will appear here', 'aria-label': 'Resolved hoster links' });
         var copyBtn = E('button', { class: 'ea-btn', type: 'button', text: 'Copy links' });
         var jdBtn = E('button', { class: 'ea-btn', type: 'button', text: 'Send to JDownloader' });
         var toolbar = E('div', { class: 'ea-fc-toolbar' }, [copyBtn, jdBtn]);
@@ -1931,7 +2009,9 @@
         var popup = null;
 
         function goUrls() {
-            return (output.value.match(/https:\/\/(?:www\.)?filecrypt\.cc\/Go\/\S+/gi) || []);
+            return (output.value.match(/https?:\/\/[^\s]+/gi) || []).filter(function (url) {
+                return isHosterURL(url);
+            });
         }
 
         function child() {
@@ -2044,7 +2124,7 @@
                 return;
             }
             var row = state.pending.row;
-            if (payload.ok && isFilecryptGoURL(payload.goURL)) {
+            if (payload.ok && isHosterURL(payload.goURL)) {
                 output.value += row.filename + '\n' + payload.goURL + '\n\n';
             } else {
                 output.value += row.filename + '\nERROR: ' + (payload.ok ? 'invalid link' : payload.error) + '\n\n';

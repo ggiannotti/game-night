@@ -29,7 +29,19 @@ function installMocks({ savedCache, blockStorage, useFetch }) {
     };
     window.GM_getValue = (key, fallback) => fallback;
     window.GM_registerMenuCommand = () => {};
-    if (!useFetch) window.GM_xmlhttpRequest = options => { window.__requests.push(options); };
+    if (!useFetch) {
+        window.GM_xmlhttpRequest = options => {
+            window.__requests.push(options);
+            if (options.url && /filecrypt\.cc\/Go\//i.test(options.url)) {
+                const id = String(options.url.split('/Go/')[1] || 'file').replace(/\.html$/i, '');
+                queueMicrotask(() => options.onload && options.onload({
+                    status: 302,
+                    finalUrl: 'https://ddownload.com/' + id,
+                    responseText: ''
+                }));
+            }
+        };
+    }
 }
 
 async function open(t, { url = 'https://elamigos.site/#/all', html = indexHTML, savedCache, blockStorage, useFetch, fetchStatus = 200, fetchBody = indexHTML, fetchHang = false, useClock = false, viewport } = {}) {
@@ -442,8 +454,9 @@ test('Filecrypt Link page skips an off-site /Go/ candidate before the real one',
     });
     await page.waitForFunction(() => document.querySelector('.ea-fc-results').value.includes('Pack\n'));
     const output = await page.locator('.ea-fc-results').inputValue();
-    assert.match(output, /https:\/\/filecrypt\.cc\/Go\/real\.html/);
+    assert.match(output, /https:\/\/ddownload\.com\/real/);
     assert.doesNotMatch(output, /ads\.example/);
+    assert.doesNotMatch(output, /filecrypt\.cc\/Go\//);
 });
 
 async function openFilecryptOverlay(t, { useClock = false } = {}) {
