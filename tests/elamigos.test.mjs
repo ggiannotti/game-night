@@ -481,6 +481,64 @@ async function postPowStatus(popup, state) {
     }, state);
 }
 
+test('Filecrypt overlay Send to JDownloader posts hoster URLs to Click n Load', async t => {
+    const { page, overlay, popup } = await openFilecryptOverlay(t);
+    await popup.evaluate(() => {
+        window.opener.postMessage({
+            eaFilecrypt: true,
+            payload: { type: 'container-ready', rows: [{ filename: 'Pack', linkURL: 'https://filecrypt.cc/Link/a.html' }] }
+        }, '*');
+    });
+    await popup.waitForURL(/__ea_token=/, { timeout: 5_000 });
+    await popup.evaluate(() => {
+        const token = new URL(location.href).searchParams.get('__ea_token');
+        window.opener.postMessage({
+            eaFilecrypt: true,
+            payload: { type: 'link-result', token, ok: true, goURL: 'https://ddownload.com/abc123' }
+        }, '*');
+    });
+    await page.waitForFunction(() => document.querySelector('.ea-fc-results').value.includes('ddownload.com/abc123'));
+    await overlay.getByRole('button', { name: 'Send to JDownloader' }).click();
+    const req = await page.evaluate(() => window.__requests.find(request => (request.url || '').includes('127.0.0.1:9666/flash/add')));
+    assert.ok(req, 'Click n Load POST must be issued');
+    assert.equal(req.method, 'POST');
+    assert.match(req.headers['Content-Type'], /application\/x-www-form-urlencoded/);
+    assert.equal(req.url, 'http://127.0.0.1:9666/flash/add');
+    const body = decodeURIComponent(String(req.data || '').replace(/^urls=/, ''));
+    assert.match(body, /https:\/\/ddownload\.com\/abc123/);
+    assert.doesNotMatch(body, /filecrypt\.cc\/Go\//);
+    await page.evaluate(() => {
+        const request = window.__requests.find(item => (item.url || '').includes('9666/flash/add'));
+        request.onload({ status: 200 });
+    });
+    await overlay.getByRole('button', { name: 'Sent to JDownloader' }).waitFor();
+});
+
+test('Filecrypt overlay Send to JDownloader shows offline when Click n Load fails', async t => {
+    const { page, overlay, popup } = await openFilecryptOverlay(t);
+    await popup.evaluate(() => {
+        window.opener.postMessage({
+            eaFilecrypt: true,
+            payload: { type: 'container-ready', rows: [{ filename: 'Pack', linkURL: 'https://filecrypt.cc/Link/a.html' }] }
+        }, '*');
+    });
+    await popup.waitForURL(/__ea_token=/, { timeout: 5_000 });
+    await popup.evaluate(() => {
+        const token = new URL(location.href).searchParams.get('__ea_token');
+        window.opener.postMessage({
+            eaFilecrypt: true,
+            payload: { type: 'link-result', token, ok: true, goURL: 'https://rapidgator.net/file/xyz' }
+        }, '*');
+    });
+    await page.waitForFunction(() => document.querySelector('.ea-fc-results').value.includes('rapidgator.net'));
+    await overlay.getByRole('button', { name: 'Send to JDownloader' }).click();
+    await page.evaluate(() => {
+        const request = window.__requests.find(item => (item.url || '').includes('9666/flash/add'));
+        request.onerror(new Error('offline'));
+    });
+    await overlay.getByRole('button', { name: 'JDownloader offline' }).waitFor();
+});
+
 test('Filecrypt overlay treats a new captcha after Confirmed as failure', async t => {
     const { overlay, popup } = await openFilecryptOverlay(t);
     await postPowStatus(popup, 'done');
